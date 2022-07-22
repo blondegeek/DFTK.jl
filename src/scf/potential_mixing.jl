@@ -231,7 +231,6 @@ trial_damping(damping::FixedDamping, args...) = damping.α
     tol=1e-6,
     maxiter=100,
     eigensolver=lobpcg_hyper,
-    n_ep_extra=3,
     diag_miniter=1,
     determine_diagtol=ScfDiagtol(),
     mixing=SimpleMixing(),
@@ -248,22 +247,20 @@ trial_damping(damping::FixedDamping, args...) = damping.α
              || mixing isa KerkerDosMixing)
     damping isa Number && (damping = FixedDamping(damping))
 
-    if ψ !== nothing
+    if !isnothing(ψ)
         @assert length(ψ) == length(basis.kpoints)
-        for ik in 1:length(basis.kpoints)
-            @assert size(ψ[ik], 2) == n_bands + n_ep_extra
-        end
     end
 
     # Initial guess for V (if none given)
     energies, ham = energy_hamiltonian(basis, nothing, nothing; ρ=ρ)
     isnothing(V) && (V = total_local_potential(ham))
 
-    function EVρ(Vin; diagtol=tol / 10, ψ=nothing)
+    function EVρ(Vin; diagtol=tol / 10, ψ=nothing, eigenvalues=nothing, occupation=nothing)
         ham_V = hamiltonian_with_total_potential(ham, Vin)
-        res_V = next_density(ham_V; n_bands=n_bands, ψ=ψ, n_ep_extra=n_ep_extra,
-                             miniter=diag_miniter, tol=diagtol, eigensolver=eigensolver,
-                             occupation_threshold)
+
+        res_V = next_density(ham_V; eigensolver, ψ, eigenvalues,
+                             occupation, occupation_threshold, n_bands,
+                             miniter=diag_miniter, tol=diagtol)
         new_E, new_ham = energy_hamiltonian(basis, res_V.ψ, res_V.occupation;
                                             ρ=res_V.ρout, eigenvalues=res_V.eigenvalues,
                                             εF=res_V.εF)
@@ -275,7 +272,7 @@ trial_damping(damping::FixedDamping, args...) = damping.α
     converged = false
     α_trial   = trial_damping(damping)
     diagtol   = determine_diagtol((ρin=ρ, Vin=V, n_iter=n_iter))
-    info      = EVρ(V; diagtol=diagtol, ψ=ψ)
+    info      = EVρ(V; diagtol, ψ)
     Pinv_δV   = mix_potential(mixing, basis, info.Vout - info.Vin; n_iter, info...)
     info      = merge(info, (α=NaN, diagonalization=[info.diagonalization], ρin=ρ,
                              n_iter=n_iter, Pinv_δV=Pinv_δV))
@@ -308,7 +305,7 @@ trial_damping(damping::FixedDamping, args...) = damping.α
             mpi_master() && @debug "Iteration $n_iter linesearch step $n_backtrack   α=$α diagtol=$diagtol"
             Vnext = info.Vin .+ α .* δV
 
-            info_next    = EVρ(Vnext; ψ=guess, diagtol=diagtol)
+            info_next    = EVρ(Vnext; ψ=guess, diagtol, info.eigenvalues, info.occupation)
             Pinv_δV_next = mix_potential(mixing, basis, info_next.Vout - info_next.Vin;
                                          n_iter, info_next...)
             push!(diagonalization, info_next.diagonalization)
@@ -347,7 +344,7 @@ trial_damping(damping::FixedDamping, args...) = damping.α
     ham  = hamiltonian_with_total_potential(ham, info.Vout)
     info = (ham=ham, basis=basis, energies=info.energies, converged=converged,
             ρ=info.ρout, eigenvalues=info.eigenvalues, occupation=info.occupation,
-            εF=info.εF, n_iter=n_iter, n_ep_extra=n_ep_extra, ψ=info.ψ,
+            εF=info.εF, n_iter=n_iter, ψ=info.ψ, info.n_bands,
             diagonalization=info.diagonalization, stage=:finalize, algorithm="SCF",
             occupation_threshold=info.occupation_threshold)
     callback(info)
