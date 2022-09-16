@@ -50,6 +50,34 @@ conda install -c conda-forge ase
 See also the [installation instructions](https://wiki.fysik.dtu.dk/ase/install.html)
 in the ASE documentation.
 
+## Troubleshooting MKL library errors
+
+If you get an error like...
+
+```
+julia> using DFTK
+[ Info: Precompiling DFTK [acf6eb54-70d9-11e9-0013-234b7a5f5337]
+INTEL MKL ERROR: dlopen(/Users/username/.julia/conda/3/lib/libmkl_intel_thread.1.dylib, 9): Library not loaded: @rpath/libiomp5.dylib
+  Referenced from: /Users/username/.julia/conda/3/lib/libmkl_intel_thread.1.dylib
+  Reason: image not found.
+Intel MKL FATAL ERROR: Cannot load libmkl_intel_thread.1.dylib.
+ERROR: Failed to precompile DFTK [acf6eb54-70d9-11e9-0013-234b7a5f5337] to /Users/username/.julia/compiled/v1.8/DFTK/jl_FXfx6K.
+```
+
+... this likely means that your conda and julia MKL versions are conflicting. 🥺 Fortunately, there's a quick fix! 😅
+
+```
+julia> using Conda
+julia> Conda.add("nomkl")
+```
+
+Then you can try again 🥳
+```
+julia> using DFTK
+[ Info: Precompiling DFTK [acf6eb54-70d9-11e9-0013-234b7a5f5337]
+```
+
+
 ## Developer setup
 If you want to start developing DFTK Julia has the option to
 automatically keep track of the changes of the sources during development.
